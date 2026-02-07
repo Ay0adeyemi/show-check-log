@@ -18,6 +18,9 @@ import toast from "react-hot-toast"
 import { signOut } from "firebase/auth"
 import { auth } from "../firebase"
 import PriorityLegend from "../components/PriorityLegend"
+import PromoDrawer from "../components/PromoDrawer"
+import { Tag } from "lucide-react"
+
 
 export default function Tasks({ user }) {
   const navigate = useNavigate()
@@ -25,6 +28,8 @@ export default function Tasks({ user }) {
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
+  const [promoOpen, setPromoOpen] = useState(false)
+
 
   const logout = async () => {
     await signOut(auth)
@@ -99,15 +104,30 @@ export default function Tasks({ user }) {
 
       <Navbar username={user?.displayName || user?.email} onLogout={logout} />
 
-      <div className="max-w-5xl mx-auto w-full px-4 mt-6 relative">
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="inline-flex items-center gap-2 text-white/80 hover:text-white font-semibold hover:underline text-lg mt-20"
-        >
-          <ArrowLeft size={18} />
-          Back to Dashboard
-        </button>
-      </div>
+     <div className="w-full max-w-5xl mx-auto px-4 mt-20">
+  <div className="w-full flex items-center justify-between">
+
+    <button
+      onClick={() => navigate("/dashboard")}
+      className="flex items-center gap-2 text-white/90 hover:text-white font-bold text-lg"
+    >
+      <ArrowLeft size={18} />
+      Back to Dashboard
+    </button>
+
+    <button
+      onClick={() => setPromoOpen(true)}
+      className="flex items-center gap-2 px-4 py-2 rounded-xl
+                 bg-white/10 border border-white/10 backdrop-blur-xl
+                 hover:bg-white/15 transition font-semibold"
+    >
+      <Tag size={18} />
+      Promo Codes
+    </button>
+  </div>
+</div>
+
+
 
       <div className="max-w-5xl mx-auto w-full p-4 relative">
         <PriorityLegend />
@@ -149,6 +169,13 @@ export default function Tasks({ user }) {
           </div>
         )}
       </div>
+      <PromoDrawer
+  open={promoOpen}
+  onClose={() => setPromoOpen(false)}
+  user={user}
+/>
+
+
     </div>
   )
 }
