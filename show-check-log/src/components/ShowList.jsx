@@ -118,9 +118,12 @@ export default function ShowList({
 
                     return (
                       <div
-                        key={check.id}
-                        className="border border-white/10 rounded-2xl p-4 bg-black/20 shadow-sm"
+                          key={check.id}
+                          className={[ "rounded-2xl p-4 bg-black/20 shadow-sm border",
+                                      overdue ? "border-red-500/40" : "border-white/10"].join(" ")}
+                          style={overdue ? { animation: "entryOverdueGlow 1.6s ease-in-out infinite" } : undefined}
                       >
+
                         {editingId === check.id ? (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="flex flex-col gap-1">
@@ -271,24 +274,24 @@ export default function ShowList({
 }
 
 function getLatestCheckedAt(show) {
-  const times = (show.checks || []).map((c) => c.checkedAt).filter(Boolean)
+  const times = (show.checks || [])
+    .map((c) => c.checkedAt)
+    .filter(Boolean)
+
   if (times.length === 0) return null
+
   return Math.max(...times)
 }
 
-function isSameDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  )
+function toUtcDayKey(ms) {
+  const d = new Date(ms)
+  return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`
 }
 
 function isCheckedToday(checkedAt) {
   if (!checkedAt) return false
-  return isSameDay(new Date(checkedAt), new Date())
+  return toUtcDayKey(checkedAt) === toUtcDayKey(Date.now())
 }
-
 function isOverdue(checkedAt) {
   if (!checkedAt) return true
   return !isCheckedToday(checkedAt)
@@ -298,13 +301,16 @@ function formatRelative(ms) {
   if (!ms) return "—"
 
   const diff = Date.now() - ms
+
   if (diff < 60_000) return "just now"
 
   const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`
+  if (mins < 60)
+    return `${mins} minute${mins === 1 ? "" : "s"} ago`
 
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`
+  if (hours < 24)
+    return `${hours} hour${hours === 1 ? "" : "s"} ago`
 
   const days = Math.floor(hours / 24)
   return `${days} day${days === 1 ? "" : "s"} ago`
