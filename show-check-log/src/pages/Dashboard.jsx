@@ -25,6 +25,8 @@ import {
 } from "firebase/firestore"
 
 export default function Dashboard({ user }) {
+  const navigate = useNavigate()
+
   const [tasksCount, setTasksCount] = useState(0)
   const [shows, setShows] = useState([])
   const [showForm, setShowForm] = useState(false)
@@ -34,9 +36,6 @@ export default function Dashboard({ user }) {
   const [reminders, setReminders] = useState([])
   const [reminderOpen, setReminderOpen] = useState(false)
 
-  const navigate = useNavigate()
-
-  // Shows
   useEffect(() => {
     setLoading(true)
     setLoadError("")
@@ -45,8 +44,8 @@ export default function Dashboard({ user }) {
       collection(db, "shows"),
       (snapshot) => {
         const data = snapshot.docs.map((d) => ({
-          ...d.data(),
-          id: d.id
+          id: d.id,
+          ...d.data()
         }))
         setShows(data)
         setLoading(false)
@@ -56,29 +55,28 @@ export default function Dashboard({ user }) {
         setLoading(false)
 
         if (error?.code === "permission-denied") {
-          setLoadError("Session expired or not authorized. Please log in again.")
-          toast.error("Please log in again")
+          toast.error("Session expired. Please login again.")
           navigate("/")
           return
         }
 
-        setLoadError("Something went wrong while loading shows.")
-        toast.error("Failed to load shows")
+        setLoadError("Failed to load shows.")
       }
     )
 
     return () => unsub()
   }, [navigate])
 
-  // Tasks count
+
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "tasks"), (snapshot) => {
       setTasksCount(snapshot.size)
     })
+
     return () => unsub()
   }, [])
 
-  // Reminders (per user)
+
   useEffect(() => {
     if (!user?.uid) return
 
@@ -87,31 +85,27 @@ export default function Dashboard({ user }) {
       orderBy("createdAt", "desc")
     )
 
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-        setReminders(data)
-      },
-      (error) => {
-        console.error("REMINDERS LOAD ERROR:", error)
-      }
-    )
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data()
+      }))
+      setReminders(data)
+    })
 
     return () => unsub()
   }, [user?.uid])
 
+
   const logout = async () => {
-    try {
-      await signOut(auth)
-      navigate("/")
-    } catch (err) {
-      console.log(err)
-    }
+    await signOut(auth)
+    navigate("/")
   }
+
 
   const addShow = async (name) => {
     if (!name?.trim()) return
+
     try {
       await addDoc(collection(db, "shows"), {
         name: name.trim(),
@@ -119,7 +113,7 @@ export default function Dashboard({ user }) {
         createdAt: Date.now()
       })
       toast.success("Show added")
-    } catch (e) {
+    } catch {
       toast.error("Failed to add show")
     }
   }
@@ -127,12 +121,13 @@ export default function Dashboard({ user }) {
   const addCheck = async (showId, check) => {
     const show = shows.find((s) => s.id === showId)
     if (!show) return
+
     try {
       await updateDoc(doc(db, "shows", showId), {
         checks: [...show.checks, check]
       })
       toast.success("Check added")
-    } catch (e) {
+    } catch {
       toast.error("Failed to add check")
     }
   }
@@ -140,12 +135,13 @@ export default function Dashboard({ user }) {
   const deleteCheck = async (showId, checkId) => {
     const show = shows.find((s) => s.id === showId)
     if (!show) return
+
     try {
       await updateDoc(doc(db, "shows", showId), {
         checks: show.checks.filter((c) => c.id !== checkId)
       })
       toast.success("Check deleted")
-    } catch (e) {
+    } catch {
       toast.error("Failed to delete check")
     }
   }
@@ -153,6 +149,7 @@ export default function Dashboard({ user }) {
   const updateCheck = async (showId, updatedCheck) => {
     const show = shows.find((s) => s.id === showId)
     if (!show) return
+
     try {
       await updateDoc(doc(db, "shows", showId), {
         checks: show.checks.map((c) =>
@@ -160,7 +157,7 @@ export default function Dashboard({ user }) {
         )
       })
       toast.success("Check updated")
-    } catch (e) {
+    } catch {
       toast.error("Failed to update check")
     }
   }
@@ -169,17 +166,14 @@ export default function Dashboard({ user }) {
     try {
       await deleteDoc(doc(db, "shows", showId))
       toast.success("Show deleted")
-    } catch (e) {
+    } catch {
       toast.error("Failed to delete show")
     }
   }
 
-  // Save reminder (stores day offsets)
+
   const saveReminder = async ({ daysFrom, daysTo }) => {
-    if (!user?.uid) {
-      toast.error("Please log in again")
-      return
-    }
+    if (!user?.uid) return
 
     try {
       await addDoc(collection(db, "users", user.uid, "reminders"), {
@@ -187,50 +181,57 @@ export default function Dashboard({ user }) {
         daysTo,
         createdAt: Date.now()
       })
+
       toast.success("Reminder saved")
       setReminderOpen(false)
     } catch (e) {
-      console.error("SAVE REMINDER ERROR:", e)
+      console.error(e)
       toast.error("Failed to save reminder")
     }
   }
 
-  const deleteReminder = async (reminderId) => {
-    if (!user?.uid) return
+  const deleteReminder = async (id) => {
     try {
-      await deleteDoc(doc(db, "users", user.uid, "reminders", reminderId))
+      await deleteDoc(doc(db, "users", user.uid, "reminders", id))
       toast.success("Reminder deleted")
-    } catch (e) {
+    } catch {
       toast.error("Failed to delete reminder")
     }
   }
 
+  /* ------------------------------ UI ------------------------------ */
+
   return (
     <div className="min-h-screen flex flex-col bg-[#0b1220] text-white relative overflow-hidden">
+      {/* Background blobs */}
       <div className="pointer-events-none absolute -top-24 -left-24 w-80 h-80 bg-blue-600/25 blur-3xl rounded-full" />
       <div className="pointer-events-none absolute -bottom-28 -right-20 w-96 h-96 bg-cyan-400/15 blur-3xl rounded-full" />
 
-      <Navbar username={user?.displayName || user?.email} onLogout={logout} />
+      <Navbar
+        username={user?.displayName || user?.email}
+        onLogout={logout}
+      />
 
       <div className="flex-grow p-4 max-w-5xl mx-auto w-full relative mt-16">
-        {/* Reminder button */}
-        <div className="flex items-center justify-end mb-4">
+
+        {/* Reminder Button */}
+        <div className="flex justify-end mb-6">
           <button
             onClick={() => setReminderOpen(true)}
             className="p-3 rounded-2xl bg-white/10 border border-white/10 backdrop-blur-xl hover:bg-white/15 transition"
-            title="Add Reminder"
           >
             <Bell className="w-5 h-5 text-white/90" />
           </button>
         </div>
 
-        {/* Reminders list (no sliding message) */}
+        {/* Reminders */}
         <ReminderList
           username={user?.displayName || user?.email || "there"}
           reminders={reminders}
           onDelete={deleteReminder}
         />
 
+        {/* Shows To Check Button */}
         <button
           onClick={() => navigate("/tasks")}
           className="relative w-full rounded-2xl px-6 py-5 font-semibold text-lg
@@ -246,17 +247,21 @@ export default function Dashboard({ user }) {
           )}
         </button>
 
+        {/* Add Entry */}
         <button
           onClick={() => setShowForm(!showForm)}
           className="w-full mt-6 rounded-2xl px-6 py-5 font-semibold text-lg
-                     bg-blue-600/90 hover:bg-blue-600 text-white
+                     bg-blue-600 hover:bg-blue-700
                      shadow-xl shadow-blue-600/20 transition active:scale-[0.99]"
         >
           + Add Entry
         </button>
 
         {showForm && (
-          <ShowForm onAdd={addShow} onClose={() => setShowForm(false)} />
+          <ShowForm
+            onAdd={addShow}
+            onClose={() => setShowForm(false)}
+          />
         )}
 
         {reminderOpen && (
@@ -267,7 +272,7 @@ export default function Dashboard({ user }) {
         )}
 
         {loadError && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-200 rounded-2xl p-4 mt-5 backdrop-blur-xl">
+          <div className="bg-red-500/10 border border-red-500/30 text-red-200 rounded-2xl p-4 mt-6 backdrop-blur-xl">
             {loadError}
           </div>
         )}
@@ -284,6 +289,7 @@ export default function Dashboard({ user }) {
         ) : (
           <div className="mt-6">
             <ShowList
+              user={user}   
               shows={shows}
               onAddCheck={addCheck}
               onDeleteCheck={deleteCheck}
