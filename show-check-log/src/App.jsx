@@ -15,9 +15,26 @@ import { Toaster } from "react-hot-toast"
 
 
 export default function App() {
-
   const [user, setUser] = useState(null)
 const [loading, setLoading] = useState(true)
+
+const [theme, setTheme] = useState(
+  localStorage.getItem("theme") || "dark"
+)
+
+useEffect(() => {
+  if (theme === "dark") {
+    document.documentElement.classList.add("dark")
+  } else {
+    document.documentElement.classList.remove("dark")
+  }
+
+  localStorage.setItem("theme", theme)
+}, [theme])
+
+const toggleTheme = () => {
+  setTheme(theme === "dark" ? "light" : "dark")
+}
 
 useEffect(() => {
   const unsub = onAuthStateChanged(auth, (u) => {
@@ -34,8 +51,35 @@ useEffect(() => {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/dashboard" element={user ? <Dashboard user={user}/> : <Navigate to="/" />} />
-        <Route path="/tasks" element={user ? <Tasks user={user}/> : <Navigate to="/" />} />
+        <Route
+  path="/dashboard"
+  element={
+    user ? (
+      <Dashboard
+        user={user}
+        theme={theme}
+        toggleTheme={toggleTheme}
+      />
+    ) : (
+      <Navigate to="/" />
+    )
+  }
+/>
+
+<Route
+  path="/tasks"
+  element={
+    user ? (
+      <Tasks
+        user={user}
+        theme={theme}
+        toggleTheme={toggleTheme}
+      />
+    ) : (
+      <Navigate to="/" />
+    )
+  }
+/>
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
       </Routes>

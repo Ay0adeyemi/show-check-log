@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Trash2, ChevronDown } from "lucide-react"
+import { useEffect, useRef } from "react"
+import { Bell, Trash2 } from "lucide-react"
 
 function addDays(base, days) {
   const d = new Date(base)
@@ -9,90 +9,103 @@ function addDays(base, days) {
 
 function formatNice(date) {
   return date.toLocaleDateString("en-US", {
-    month: "long",
+    month: "short",
     day: "numeric",
     year: "numeric"
   })
 }
 
-export default function ReminderList({ username, reminders, onDelete }) {
-  const [open, setOpen] = useState(true)
+export default function ReminderList({ reminders, onDelete, onClose }) {
 
-  if (!reminders || reminders.length === 0) return null
+  const ref = useRef(null)
+
+  useEffect(()=>{
+
+    function handleClick(e){
+      if(ref.current && !ref.current.contains(e.target)){
+        onClose?.()
+      }
+    }
+
+    document.addEventListener("mousedown",handleClick)
+
+    return ()=>document.removeEventListener("mousedown",handleClick)
+
+  },[])
+
+  if(!reminders || reminders.length === 0) return null
 
   const today = new Date()
 
-  return (
-    <div className="mb-6">
-      <button
-        type="button"
-        onClick={() => setOpen((p) => !p)}
-        className="w-full bg-white/10 border border-white/10 backdrop-blur-xl rounded-2xl px-4 py-3
-                   flex items-center justify-between gap-3 hover:bg-white/15 transition"
-      >
-        <div className="flex items-center gap-3">
-          <div className="text-white/90 font-semibold">
-            Reminders
-          </div>
+  return(
 
-          <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-white/10 border border-white/10 text-white/80">
-            {reminders.length}
-          </span>
-        </div>
+  <div
+  ref={ref}
+  className="
+  bg-gray-800
+  dark:bg-blue-500/10
+  border border-blue-400/30
+  rounded-xl
+  p-4
+  mb-6
+  "
+  >
 
-        <ChevronDown
-          className={`w-5 h-5 text-white/70 transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-        />
-      </button>
+  {reminders.map(r=>{
 
-      {/* Collapsible body */}
-      <div
-        className={`overflow-hidden transition-all duration-300 ${
-          open ? "max-h-[900px] opacity-100 mt-3" : "max-h-0 opacity-0 mt-0"
-        }`}
-      >
-        <div className="space-y-3">
-          {reminders.map((r) => {
-            const start = addDays(today, r.daysFrom)
-            const end = addDays(today, r.daysTo)
+  const start = addDays(today,r.daysFrom)
+  const end = addDays(today,r.daysTo)
 
-            return (
-              <div
-                key={r.id}
-                className="bg-white/10 border border-white/10 backdrop-blur-xl rounded-2xl p-4
-                           flex items-start justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <p className="text-white/90 font-semibold">
-                    Hi {username},
-                  </p>
+  return(
 
-                  <p className="text-white/70 text-sm leading-relaxed">
-                    You are to check all shows from{" "}
-                    <span className="text-white">{formatNice(start)}</span>{" "}
-                    to{" "}
-                    <span className="text-white">{formatNice(end)}</span>.
-                  </p>
+  <div
+  key={r.id}
+  className="
+  flex items-center justify-between
+  "
+  >
 
-                  <p className="text-white/50 text-xs mt-1">
-                    ({r.daysFrom} → {r.daysTo} days from today)
-                  </p>
-                </div>
+  <div className="flex items-center gap-3">
 
-                <button
-                  onClick={() => onDelete(r.id)}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition"
-                  title="Delete reminder"
-                >
-                  <Trash2 className="w-5 h-5 text-red-300" />
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </div>
+  <Bell className="w-5 h-5 text-blue-300"/>
+
+  <div>
+
+  <p className="text-white font-semibold text-sm">
+  Reminder Active
+  </p>
+
+  <p className="text-white/70 text-sm">
+  Check shows from {formatNice(start)} → {formatNice(end)}
+  </p>
+
+  </div>
+
+  </div>
+
+  <button
+  onClick={()=>onDelete(r.id)}
+  className="
+  p-2
+  rounded-lg
+  bg-white/5
+  border border-white/10
+  hover:bg-white/10
+  "
+  >
+
+  <Trash2 className="w-4 h-4 text-red-300"/>
+
+  </button>
+
+  </div>
+
   )
+
+  })}
+
+  </div>
+
+  )
+
 }

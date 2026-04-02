@@ -6,7 +6,8 @@ import {
   onSnapshot,
   deleteDoc,
   doc,
-  updateDoc
+  updateDoc,
+  getDocs
 } from "firebase/firestore"
 
 import Navbar from "../components/Navbar"
@@ -22,7 +23,7 @@ import PromoDrawer from "../components/PromoDrawer"
 import { Tag } from "lucide-react"
 
 
-export default function Tasks({ user }) {
+export default function Tasks({ user, theme, toggleTheme }) {
   const navigate = useNavigate()
   const [tasks, setTasks] = useState([])
   const [showForm, setShowForm] = useState(false)
@@ -70,13 +71,33 @@ export default function Tasks({ user }) {
   }, [navigate])
 
   const addTask = async (task) => {
-    try {
-      await addDoc(collection(db, "tasks"), task)
-      toast.success("Task added")
-    } catch (e) {
-      toast.error("Failed to add task")
+  try {
+
+    // Save task
+    await addDoc(collection(db, "tasks"), task)
+
+    // Check if show already exists
+    const snapshot = await getDocs(collection(db, "shows"))
+
+    const exists = snapshot.docs.some(
+      d => d.data().name.toLowerCase() === task.name.toLowerCase()
+    )
+
+    // If show doesn't exist, create it
+    if (!exists) {
+      await addDoc(collection(db, "shows"), {
+        name: task.name,
+        checks: [],
+        createdAt: Date.now()
+      })
     }
+
+    toast.success("Show added")
+
+  } catch (e) {
+    toast.error("Failed to add task")
   }
+}
 
   const deleteTask = async (id) => {
     try {
@@ -102,7 +123,7 @@ export default function Tasks({ user }) {
       <div className="pointer-events-none absolute -top-24 -left-24 w-80 h-80 bg-blue-600/25 blur-3xl rounded-full" />
       <div className="pointer-events-none absolute -bottom-28 -right-20 w-96 h-96 bg-cyan-400/15 blur-3xl rounded-full" />
 
-      <Navbar username={user?.displayName || user?.email} onLogout={logout} />
+      <Navbar username={user?.displayName || user?.email} onLogout={logout} theme={theme} toggleTheme={toggleTheme}/>
 
      <div className="w-full max-w-5xl mx-auto px-4 mt-20">
   <div className="w-full flex items-center justify-between">

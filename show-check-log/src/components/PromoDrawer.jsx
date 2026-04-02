@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react"
 import { db } from "../firebase"
 import {
@@ -5,14 +6,16 @@ import {
   addDoc,
   onSnapshot,
   deleteDoc,
-  doc
+  doc,
+  getDocs
 } from "firebase/firestore"
 import { X, ChevronDown, Plus, Trash2, Tag } from "lucide-react"
+import ConfirmModal from "../components/ConfirmModal"
 
 export default function PromoDrawer({ open, onClose, user }) {
   const [promoShows, setPromoShows] = useState([])
   const [openShowId, setOpenShowId] = useState(null)
-
+const [confirmDeleteShow,setConfirmDeleteShow] = useState(null)
   const [showAddShow, setShowAddShow] = useState(false)
   const [newShowName, setNewShowName] = useState("")
 
@@ -168,23 +171,54 @@ export default function PromoDrawer({ open, onClose, user }) {
               ) : (
                 promoShows.map((show) => (
                   <PromoShowItem
-                    key={show.id}
-                    show={show}
-                    isOpen={openShowId === show.id}
-                    onToggle={() => toggleShow(show.id)}
-                    onAddCode={() => setShowAddCodeFor({ id: show.id, name: show.name })}
-                    onCloseAddCode={() => setShowAddCodeFor(null)}
-                    showAddCodeFor={showAddCodeFor}
-                    codeForm={codeForm}
-                    setCodeForm={setCodeForm}
-                    addPromoCode={addPromoCode}
-                  />
+key={show.id}
+show={show}
+isOpen={openShowId === show.id}
+onToggle={() => toggleShow(show.id)}
+onAddCode={() => setShowAddCodeFor({ id: show.id, name: show.name })}
+onCloseAddCode={() => setShowAddCodeFor(null)}
+showAddCodeFor={showAddCodeFor}
+codeForm={codeForm}
+setCodeForm={setCodeForm}
+addPromoCode={addPromoCode}
+onDeleteShow={() => setConfirmDeleteShow(show)}
+/>
                 ))
               )}
             </div>
           </div>
         </div>
       </aside>
+      {confirmDeleteShow && (
+<ConfirmModal
+title="Delete Promo Show"
+message={`Delete "${confirmDeleteShow.name}" and all its promo codes?`}
+confirmText="Delete"
+onCancel={()=>setConfirmDeleteShow(null)}
+onConfirm={async ()=>{
+
+try{
+
+const codesRef = collection(db,"promoShows",confirmDeleteShow.id,"codes")
+const codesSnap = await getDocs(codesRef)
+
+await Promise.all(
+codesSnap.docs.map(d =>
+deleteDoc(doc(db,"promoShows",confirmDeleteShow.id,"codes",d.id))
+)
+)
+
+await deleteDoc(doc(db,"promoShows",confirmDeleteShow.id))
+
+}catch(err){
+console.error(err)
+}
+
+setConfirmDeleteShow(null)
+
+}}
+/>
+)}
     </>
   )
 }
@@ -198,7 +232,8 @@ function PromoShowItem({
   onCloseAddCode,
   codeForm,
   setCodeForm,
-  addPromoCode
+  addPromoCode,
+  onDeleteShow
 }) {
   const [codes, setCodes] = useState([])
   const [loading, setLoading] = useState(false)
@@ -225,27 +260,82 @@ function PromoShowItem({
     await deleteDoc(doc(db, "promoShows", show.id, "codes", codeId))
   }
 
+  const deleteShow = async () => {
+
+  const confirmDelete = window.confirm(
+    `Delete "${show.name}" and all its promo codes?`
+  )
+
+  if (!confirmDelete) return
+
+  try {
+
+    const codesRef = collection(db, "promoShows", show.id, "codes")
+    const codesSnap = await getDocs(codesRef)
+
+    const deletes = codesSnap.docs.map(d =>
+      deleteDoc(doc(db, "promoShows", show.id, "codes", d.id))
+    )
+
+    await Promise.all(deletes)
+
+    await deleteDoc(doc(db, "promoShows", show.id))
+
+  } catch (err) {
+    console.error("Failed to delete show:", err)
+  }
+
+}
+
   const addingHere = showAddCodeFor?.id === show.id
 
   return (
     <div className="bg-white/10 border border-white/10 rounded-2xl overflow-hidden">
       <button
-        onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center justify-between"
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <ChevronDown
-            className={`w-5 h-5 text-white/80 transition-transform ${
-              isOpen ? "rotate-180" : ""
-            }`}
-          />
-          <span className="font-semibold text-white truncate">{show.name}</span>
-        </div>
+onClick={onToggle}
+className="w-full px-4 py-3"
+>
 
-        <span className="text-xs text-white/60">
-          {codes.length > 0 ? `${codes.length} code(s)` : ""}
-        </span>
-      </button>
+<div className="flex items-center justify-between w-full">
+
+<div className="flex items-center gap-2 min-w-0">
+
+<ChevronDown
+className={`w-5 h-5 text-white/80 transition-transform ${
+isOpen ? "rotate-180" : ""
+}`}
+/>
+
+<span className="font-semibold text-white truncate">
+{show.name}
+</span>
+
+</div>
+
+<div className="flex items-center gap-2">
+
+{codes.length > 0 && (
+<span className="text-xs text-white/60">
+{codes.length} code(s)
+</span>
+)}
+
+<button
+onClick={(e)=>{
+  e.stopPropagation()
+  onDeleteShow()
+}}
+className="p-1.5 rounded-lg hover:bg-red-500/20 transition"
+title="Delete entire show"
+>
+<Trash2 className="w-4 h-4 text-red-400" />
+</button>
+
+</div>
+
+</div>
+
+</button>
 
       {/* Body */}
       {isOpen && (
