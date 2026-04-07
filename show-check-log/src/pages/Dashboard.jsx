@@ -355,7 +355,7 @@ return true
 
 })
 
-function getOverdueShows(shows){
+function getOverdueShows(shows, userEmail){
 
   const now = Date.now()
 
@@ -363,22 +363,33 @@ function getOverdueShows(shows){
 
   shows.forEach(show => {
 
-    if(!show.createdAt) return
+    const checks = show.checks || []
 
-    const hours = (now - show.createdAt) / (1000 * 60 * 60)
+    checks.forEach(check => {
 
-    if(hours > 24){
-      overdue.push(show.name)
-    }
+      /* ONLY CHECK ENTRIES CREATED BY CURRENT USER */
+
+      if(check.checkedBy !== userEmail) return
+
+      if(!check.checkedAt) return
+
+      const hours = (now - check.checkedAt) / (1000 * 60 * 60)
+
+      if(hours > 24){
+        overdue.push(show.name)
+      }
+
+    })
 
   })
 
   return overdue
+
 }
 
 function checkOverdueAlerts(shows){
 
-  const overdue = getOverdueShows(shows)
+  const overdue = getOverdueShows(shows, user?.email)
 
   if(overdue.length > 0){
 

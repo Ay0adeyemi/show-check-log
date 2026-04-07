@@ -301,8 +301,40 @@ ${overdue
 
 <div className="flex items-center gap-3">
 
-<div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-md font-semibold text-white">
+<div className="relative">
+
+<div
+onClick={() =>
+setActiveTooltip(activeTooltip === check.id ? null : check.id)
+}
+className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-md font-semibold text-white cursor-pointer"
+>
 {getInitials(check.checkedBy)}
+</div>
+
+{activeTooltip === check.id && (
+
+<div
+className="
+absolute
+bottom-full
+mb-2
+left-1/2
+-translate-x-1/2
+px-2 py-1
+text-xs
+rounded-md
+bg-black
+text-white
+whitespace-nowrap
+z-50
+"
+>
+{check.checkedBy}
+</div>
+
+)}
+
 </div>
 
 <div className="font-semibold text-sm text-gray-800 dark:text-white">
@@ -341,6 +373,8 @@ Overdue
 
 </div>
 
+{check.checkedBy === (user?.displayName || user?.email) && (
+
 <div className="flex gap-2">
 
 <button
@@ -371,6 +405,8 @@ className="p-1.5 rounded-lg bg-white/5 border border-white/10"
 
 </div>
 
+)}
+
 </div>
 
 </div>
@@ -384,8 +420,31 @@ className="p-1.5 rounded-lg bg-white/5 border border-white/10"
 
 <div className="relative group">
 
-<div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-md font-semibold text-white">
+<div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-md font-semibold text-white cursor-pointer">
 {getInitials(check.checkedBy)}
+</div>
+
+<div
+className="
+absolute
+bottom-full
+mb-2
+left-1/2
+-translate-x-1/2
+px-2 py-1
+text-xs
+rounded-md
+bg-black
+text-white
+opacity-0
+group-hover:opacity-100
+transition
+pointer-events-none
+whitespace-nowrap
+z-50
+"
+>
+{check.checkedBy}
 </div>
 
 </div>
@@ -439,6 +498,8 @@ Overdue
 
 {/* ACTIONS */}
 
+{check.checkedBy === (user?.displayName || user?.email) && (
+
 <div className="flex md:justify-end gap-2">
 
 <button
@@ -468,6 +529,8 @@ className="p-1.5 rounded-lg bg-white/5 border border-white/10"
 </button>
 
 </div>
+
+)}
 
 </div>
 
