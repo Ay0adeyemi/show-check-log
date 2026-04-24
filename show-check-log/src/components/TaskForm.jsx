@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react"
 
 export default function TaskForm({
@@ -23,7 +24,7 @@ export default function TaskForm({
   const submit = (e) => {
     e.preventDefault()
 
-    if (!name || !link || !note || !priority) return
+    if (!name || !link || !priority) return
 
     const payload = initialValues?.createdAt
       ? { name, link, note, priority }
@@ -88,7 +89,7 @@ export default function TaskForm({
 
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-white/80">
-            Brief Note
+            Brief Note (optional)
           </label>
           <textarea
             className="w-full rounded-xl px-4 py-3 outline-none resize-none

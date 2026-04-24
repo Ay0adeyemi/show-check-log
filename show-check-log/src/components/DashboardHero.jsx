@@ -62,29 +62,29 @@ window.removeEventListener("beforeunload",handleLeave)
 
 return(
 
-<div className="w-full flex justify-center px-2 pt-5">
+<div className="text-center space-y-2 sm:space-y-3">
 
-<div className="w-full max-w-4xl text-center space-y-4">
+  <h2 className="font-bold tracking-tight 
+    text-xl sm:text-2xl md:text-3xl lg:text-4xl 
+    text-gray-900 dark:text-white leading-snug">
 
-{/* GREETING */}
+    {getGreeting()}, 
+    <br className="sm:hidden" />
 
-<div className="text-center space-y-1">
+    <span className="text-blue-600 dark:text-blue-400">
+      {user?.displayName || user?.email}
+    </span>
 
-<h2 className="text-lg sm:text-md md:text-3xl font-extrabold flex items-center justify-center gap-2 text-gray-800 dark:text-white">
+    <span className="ml-1">👋</span>
+  </h2>
 
-{getGreeting()}, {user?.displayName || user?.email}
+  <p className="text-md sm:text-sm md:text-base 
+    text-gray-600 dark:text-gray-300 
+    max-w-xl mx-auto leading-relaxed">
 
-<span className="wave text-lg md:text-xl">👋</span>
+    Stay on top of your monitoring and keep everything running smoothly.
 
-</h2>
-
-<p className="text-gray-800 dark:text-white text-[18px] sm:text-md">
-Stay on top of your monitoring and keep everything running smoothly.
-</p>
-
-</div>
-
-</div>
+  </p>
 
 </div>
 

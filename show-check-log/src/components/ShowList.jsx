@@ -1,8 +1,12 @@
 import { useState } from "react"
 import CheckForm from "./CheckForm"
-import { Pencil, Trash2, ChevronDown, Clock, Calendar } from "lucide-react"
+import { Pencil, Trash2, ChevronDown, NotebookPen } from "lucide-react"
 import ConfirmModal from "./ConfirmModal"
 import toast from "react-hot-toast"
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { storage } from "../firebase"
+import { doc, updateDoc } from "firebase/firestore"
+import { db } from "../firebase"
 
 export default function ShowList({
   shows,
@@ -10,7 +14,8 @@ export default function ShowList({
   onAddCheck,
   onDeleteCheck,
   onUpdateCheck,
-  onDeleteShows
+  onDeleteShows,
+   onDeleteNote
 }) {
 
 const playSound = () => {
@@ -24,6 +29,9 @@ const [checkModal,setCheckModal] = useState(null)
 const [editModal,setEditModal] = useState(null)
 const [activeTooltip,setActiveTooltip] = useState(null)
 const [entryToDelete,setEntryToDelete] = useState(null)
+const [notesModal,setNotesModal] = useState(null)
+const [newNote,setNewNote] = useState("")
+const [newImage,setNewImage] = useState(null)
 
 const toggleShow = (id)=>{
 setOpenShowId(prev => prev === id ? null : id)
@@ -38,6 +46,48 @@ Low:3
 const sortedShows = [...shows].sort(
 (a,b)=>priorityOrder[a.priority] - priorityOrder[b.priority]
 )
+
+const addNote = async () => {
+
+if(!newNote && !newImage) return
+
+let imageUrl = null
+
+if(newImage){
+const storageRef = ref(storage, `checkNotes/${Date.now()}-${newImage.name}`)
+await uploadBytes(storageRef,newImage)
+imageUrl = await getDownloadURL(storageRef)
+}
+
+const newNoteObj = {
+id: Date.now(),
+text: newNote,
+image: imageUrl,
+createdAt: Date.now(),
+author: user?.displayName || user?.email
+}
+
+const show = shows.find(s => s.id === notesModal.showId)
+
+const updatedChecks = show.checks.map(c => {
+
+if(c.id !== notesModal.check.id) return c
+
+return {
+...c,
+notes:[...(c.notes || []), newNoteObj]
+}
+
+})
+
+await updateDoc(doc(db,"shows",notesModal.showId),{
+checks:updatedChecks
+})
+
+setNewNote("")
+setNewImage(null)
+
+}
 
 return(
 
@@ -90,14 +140,18 @@ return(
 key={show.id}
 className={`
 rounded-xl
-bg-white border border-gray-200 shadow-sm dark:bg-white/10
-backdrop-blur
-transition
+bg-white/70 dark:bg-white/10
+backdrop-blur-xl
+border border-white/20 dark:border-white/10
+shadow-lg
+transition-all duration-200
+hover:-translate-y-[2px]
+hover:shadow-xl
 p-4
 
 ${hasNoEntries
-? "border-red-500 shadow-[0_0_14px_rgba(239,68,68,0.4)]"
-: "border-white/10"}
+? "border-red-500 shadow-[0_0_14px_rgba(239,68,68,0.45)]"
+: ""}
 `}
 >
 
@@ -217,8 +271,7 @@ className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10"
 
 
 
-
-<div className="max-w-5xl mx-auto">
+<div className="w-full px-2">
 
 {/* NO ENTRIES MESSAGE */}
 
@@ -236,7 +289,7 @@ No entries yet.
 
 <div className="
 hidden md:grid
-grid-cols-[60px_1.5fr_1.6fr_1fr_1fr_100px]
+grid-cols-[60px_1.5fr_1.6fr_1fr_1fr_80px_100px]
 text-sm
 font-bold
 uppercase
@@ -245,6 +298,7 @@ text-gray-400 dark:text-white/60
 border-b
 border-white dark:border-white/10
 px-4
+py-6
 pb-2
 mb-3
 ">
@@ -254,17 +308,22 @@ mb-3
 <div>Date/Time of Check</div>
 <div>Last Checked</div>
 <div>Status</div>
+<div>Notes</div>
 <div className="text-right">Actions</div>
 
 </div>
 
 )}
 
-<div className="space-y-3">
+<div className="space-y-5">
 
 {(show.checks || []).map(check=>{
 
 const checkedToday = isCheckedToday(check.checkedAt)
+const displayName =
+  check.userName ||
+  check.checkedBy ||
+  "Unknown"
 const overdue = isOverdue(check.checkedAt)
 
 return(
@@ -279,7 +338,7 @@ transition
 p-4
 
 md:grid
-md:grid-cols-[60px_1.5fr_1.6fr_1fr_1fr_100px]
+md:grid-cols-[60px_1.5fr_1.6fr_1fr_1fr_80px_100px]
 md:items-center
 
 flex
@@ -309,7 +368,7 @@ setActiveTooltip(activeTooltip === check.id ? null : check.id)
 }
 className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-md font-semibold text-white cursor-pointer"
 >
-{getInitials(check.checkedBy)}
+{getInitials(displayName)}
 </div>
 
 {activeTooltip === check.id && (
@@ -330,7 +389,7 @@ whitespace-nowrap
 z-50
 "
 >
-{check.checkedBy}
+{displayName}
 </div>
 
 )}
@@ -338,7 +397,9 @@ z-50
 </div>
 
 <div className="font-semibold text-sm text-gray-800 dark:text-white">
-{formatLongDate(check.startDate)} → {formatLongDate(check.endDate)}
+{check.startDate && check.endDate
+  ? `${formatLongDate(check.startDate)} → ${formatLongDate(check.endDate)}`
+  : "No date range"}
 </div>
 
 </div>
@@ -373,7 +434,30 @@ Overdue
 
 </div>
 
-{check.checkedBy === (user?.displayName || user?.email) && (
+<div className="flex items-center gap-2">
+
+{/* NOTES BUTTON */}
+
+<button
+  onClick={() => setNotesModal({ showId: show.id, check })}
+  className="relative p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10"
+>
+
+<NotebookPen
+  className={`w-4 h-4 ${
+    check.notes?.length ? "text-yellow-600" : "text-gray-400"
+  }`}
+/>
+
+{check.notes?.length > 0 && (
+  <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[9px] px-1 py-[1px] rounded-full leading-none">
+    {check.notes.length}
+  </span>
+)}
+
+</button>
+
+{check.userId === user.uid  && (
 
 <div className="flex gap-2">
 
@@ -411,6 +495,8 @@ className="p-1.5 rounded-lg bg-white/5 border border-white/10"
 
 </div>
 
+</div>
+
 
 {/* DESKTOP LAYOUT */}
 
@@ -421,7 +507,7 @@ className="p-1.5 rounded-lg bg-white/5 border border-white/10"
 <div className="relative group">
 
 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-md font-semibold text-white cursor-pointer">
-{getInitials(check.checkedBy)}
+{getInitials(displayName)}
 </div>
 
 <div
@@ -444,7 +530,7 @@ whitespace-nowrap
 z-50
 "
 >
-{check.checkedBy}
+{displayName}
 </div>
 
 </div>
@@ -454,7 +540,9 @@ z-50
 
 <div className="text-gray-800 dark:text-white font-semibold text-sm">
 
-{formatLongDate(check.startDate)} → {formatLongDate(check.endDate)}
+{check.startDate && check.endDate
+  ? `${formatLongDate(check.startDate)} → ${formatLongDate(check.endDate)}`
+  : "No date range"}
 
 </div>
 
@@ -495,10 +583,35 @@ Overdue
 
 </div>
 
+{/* NOTES */}
+
+<div className="flex justify-center">
+
+<button
+  onClick={() => setNotesModal({ showId: show.id, check })}
+  className="relative p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10"
+>
+
+<NotebookPen
+  className={`w-4 h-4 ${
+    check.notes?.length ? "text-yellow-600" : "text-gray-400"
+  }`}
+/>
+
+{check.notes?.length > 0 && (
+  <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[9px] px-1 py-[1px] rounded-full leading-none">
+    {check.notes.length}
+  </span>
+)}
+
+</button>
+
+</div>
+
 
 {/* ACTIONS */}
 
-{check.checkedBy === (user?.displayName || user?.email) && (
+{check.userId === user.uid  && (
 
 <div className="flex md:justify-end gap-2">
 
@@ -509,7 +622,9 @@ showId:show.id,
 startDate:check.startDate,
 endDate:check.endDate,
 checkedAt:check.checkedAt,
-checkedBy:check.checkedBy
+checkedBy:check.checkedBy,
+userName: check.userName || check.checkedBy,
+  userId: check.userId
 })}
 className="p-1.5 rounded-lg dark:bg-white/5 border dark:border-white/10"
 >
@@ -626,6 +741,144 @@ setCheckModal(null)
 
 )}
 
+{/* ADD NOTES MODAL */}
+{notesModal && (
+
+<div
+className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4"
+onClick={()=>setNotesModal(null)}
+>
+
+<div
+onClick={(e)=>e.stopPropagation()}
+className="w-full max-w-md max-h-[80vh] overflow-y-auto bg-[#0f172a] border border-white/10 rounded-2xl p-6 space-y-4"
+>
+
+<h2 className="text-lg font-semibold text-white">
+Entry Notes
+</h2>
+
+{/* ADD NOTE FORM */}
+
+<div className="space-y-2 border border-white/10 rounded-lg p-3">
+
+<textarea
+placeholder="Add a note..."
+value={newNote}
+onChange={(e)=>setNewNote(e.target.value)}
+className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/10 text-white text-sm"
+/>
+
+<input
+type="file"
+accept="image/*"
+onChange={(e)=>setNewImage(e.target.files[0])}
+className="text-white text-xs"
+/>
+
+<button
+onClick={addNote}
+className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm"
+>
+Add Note
+</button>
+
+</div>
+
+{(
+shows
+.find(s => s.id === notesModal.showId)
+?.checks
+.find(c => c.id === notesModal.check.id)
+?.notes || []
+).length === 0 && (
+<div className="text-white/60">No notes</div>
+)}
+
+{(
+shows
+.find(s => s.id === notesModal.showId)
+?.checks
+.find(c => c.id === notesModal.check.id)
+?.notes || []
+).map(n => {
+
+const initials = getInitials(n.author)
+
+return (
+
+<div
+key={n.id}
+className="border border-white/10 rounded-lg p-3 flex items-start gap-3"
+>
+
+{/* Avatar */}
+<div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs font-semibold text-white shrink-0">
+{initials}
+</div>
+
+{/* Note content */}
+<div className="flex-1 space-y-2">
+
+<div className="space-y-1">
+
+<div className="text-white text-sm">
+{n.text}
+</div>
+
+<div className="text-xs text-white/50">
+{formatNoteTime(n.createdAt)}
+</div>
+
+</div>
+
+{n.image && (
+<a
+href={n.image}
+download
+target="_blank"
+rel="noopener noreferrer"
+className="text-blue-400 hover:text-blue-300 text-sm underline"
+>
+📎 screenshot.png
+</a>
+)}
+
+</div>
+
+{/* Delete button */}
+<button
+onClick={() =>
+onDeleteNote(
+notesModal.showId,
+notesModal.check.id,
+n.id
+)
+}
+className="text-red-400 hover:text-red-300"
+>
+<Trash2 className="w-4 h-4"/>
+</button>
+
+</div>
+
+)
+
+})}
+
+<button
+onClick={()=>setNotesModal(null)}
+className="w-full rounded-lg py-2 bg-blue-600 hover:bg-blue-700 text-white"
+>
+Close
+</button>
+
+</div>
+
+</div>
+
+)}
+
 {/* EDIT MODAL */}
 
 {editModal && (
@@ -684,7 +937,8 @@ endDate:editModal.endDate,
 /* update timestamp */
 checkedAt: Date.now(),
 
-checkedBy: user?.displayName || user?.email
+userName: user?.displayName || user?.email,
+userId: user.uid
 }
 
 onUpdateCheck(editModal.showId,updated)
@@ -751,6 +1005,7 @@ setEntryToDelete(null)
 )}
 
 </div>
+
 
 )
 
@@ -862,5 +1117,20 @@ function isOverdue(checkedAt){
 if(!checkedAt) return true
 
 return !isCheckedToday(checkedAt)
+
+}
+
+function formatNoteTime(timestamp){
+
+if(!timestamp) return ""
+
+const d = new Date(timestamp)
+
+return d.toLocaleString("en-US",{
+month:"short",
+day:"numeric",
+hour:"numeric",
+minute:"2-digit"
+})
 
 }
