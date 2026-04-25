@@ -23,6 +23,7 @@ import {
   LayoutDashboard
 } from "lucide-react"
 import stubhubLogo from "../assets/stubhub.png"
+import toast from "react-hot-toast"
 
 export default function Home({ user, theme, toggleTheme, onLogout, onOpenNotes, shows = [] }) {
   const navigate = useNavigate()
@@ -132,6 +133,163 @@ useEffect(() => {
   }
   return () => clearInterval(interval);
 }, [clockInTime]);
+const [showSummary, setShowSummary] = useState(false)
+const [todayTasks, setTodayTasks] = useState([])
+const [copied, setCopied] = useState(false)
+const [finalDuration, setFinalDuration] = useState("00:00:00")
+const [liveStats, setLiveStats] = useState({
+  checkedToday: 0,
+  overdue: 0
+})
+const [showWeeklyReport, setShowWeeklyReport] = useState(false)
+const [weeklyData, setWeeklyData] = useState({
+  hours: 0,
+  days: 0,
+  shifts: 0,
+  checks: 0
+})
+const getTodayTasks = () => {
+  if (!shows || !user) return []
+
+  const today = new Date().toDateString()
+
+  return shows
+    .map(show => {
+      const checksToday = (show.checks || []).filter(check => {
+        return (
+          check.userId === user.uid &&
+          new Date(check.checkedAt).toDateString() === today
+        )
+      })
+
+      if (checksToday.length === 0) return null
+
+      return checksToday.map(check => ({
+        name: show.name,
+        startDate: check.startDate,
+        endDate: check.endDate
+      }))
+    })
+    .flat()
+    .filter(Boolean)
+}
+
+const generateSummaryText = () => {
+  if (!todayTasks.length) {
+    return `I'll be logging off now.\n\nNo tasks recorded.\n\nTotal time worked: ${finalDuration}`
+  }
+
+  const tasksText = todayTasks
+    .map(t => `• ${t.name} (${t.startDate} → ${t.endDate})`)
+    .join("\n")
+
+  return `I'll be logging off now.\n\nI checked:\n${tasksText}\n\nTotal time worked: ${finalDuration}`
+}
+
+const copySummary = async () => {
+  try {
+    await navigator.clipboard.writeText(generateSummaryText())
+
+    // ✅ ADD THIS
+    setCopied(true)
+
+    // ✅ RESET AFTER 2 SECONDS
+    setTimeout(() => {
+      setCopied(false)
+    }, 2000)
+
+    toast.success("Copied to clipboard", {
+      style: {
+        background: theme === "dark" ? "#020617" : "#fff",
+        color: theme === "dark" ? "#fff" : "#0f172a",
+        border: "1px solid rgba(255,255,255,0.1)",
+        padding: "12px 16px",
+        fontSize: "13px",
+        fontWeight: "600"
+      },
+      icon: "✅"
+    })
+
+  } catch (err) {
+    console.error("Copy failed", err)
+
+    toast.error("Copy failed", {
+      style: {
+        background: "#ef4444",
+        color: "#fff",
+        fontWeight: "600"
+      }
+    })
+  }
+}
+useEffect(() => {
+  if (!shows || !user) return
+
+  const today = new Date().toDateString()
+
+  let checked = 0
+  let overdue = 0
+
+  shows.forEach(show => {
+    const userChecks = (show.checks || []).filter(
+      c => c.userId === user.uid
+    )
+
+    const didCheckToday = userChecks.some(c => {
+      return new Date(c.checkedAt).toDateString() === today
+    })
+
+    if (didCheckToday) checked++
+
+    const latest = userChecks.sort((a, b) => b.checkedAt - a.checkedAt)[0]
+
+    if (!latest) {
+      overdue++
+    } else {
+      const lastDate = new Date(latest.checkedAt).toDateString()
+      if (lastDate !== today) overdue++
+    }
+  })
+
+  setLiveStats({
+    checkedToday: checked,
+    overdue: overdue
+  })
+
+}, [shows, user])
+
+const calculateWeeklyReport = () => {
+  const shifts = JSON.parse(localStorage.getItem("shifts") || "[]")
+
+  const now = new Date()
+  const startOfWeek = new Date()
+  startOfWeek.setDate(now.getDate() - now.getDay())
+
+  let totalSeconds = 0
+  let daysSet = new Set()
+  let totalChecks = 0
+
+  shifts.forEach(shift => {
+    const shiftDate = new Date(shift.date)
+
+    if (shiftDate >= startOfWeek) {
+      const [h, m, s] = shift.duration.split(":").map(Number)
+
+      totalSeconds += h * 3600 + m * 60 + s
+
+      daysSet.add(shiftDate.toDateString())
+
+      totalChecks += shift.checks
+    }
+  })
+
+  setWeeklyData({
+    hours: (totalSeconds / 3600).toFixed(1),
+    days: daysSet.size,
+    shifts: shifts.length,
+    checks: totalChecks
+  })
+}
 
   return (
     <div className={`min-h-screen transition-colors duration-500 ${bgColor} ${textColor}`}>
@@ -205,48 +363,94 @@ useEffect(() => {
           </div>
         </header>
         
-        <div className={`p-6 rounded-[2rem] border transition-all duration-500 flex items-center justify-between ${
-  clockInTime 
-    ? "bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]" 
-    : isDark ? "bg-slate-900/50 border-white/5" : "bg-white border-slate-200"
-}`}>
+        <div className={`p-6 rounded-[2rem] border transition-all duration-500 
+  flex flex-col md:flex-row md:items-center md:justify-between gap-4
+  ${
+    clockInTime 
+      ? "bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]" 
+      : isDark ? "bg-slate-900/50 border-white/5" : "bg-white border-slate-200"
+  }
+`}>
+
+  {/* LEFT SIDE */}
   <div className="flex items-center gap-4">
     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
-      clockInTime ? "bg-emerald-500 text-white animate-pulse" : "bg-slate-500/10 text-slate-500"
+      clockInTime 
+        ? "bg-emerald-500 text-white animate-pulse" 
+        : "bg-slate-500/10 text-slate-500"
     }`}>
       <Clock size={24} />
     </div>
+
     <div>
-      <p className="text-[10px] uppercase font-black tracking-widest opacity-50">Active Session</p>
-      <h3 className="text-2xl font-black font-mono tracking-tight">{sessionDuration}</h3>
+      <p className="text-[10px] uppercase font-black tracking-widest opacity-50">
+        Active Session
+      </p>
+      <h3 className="text-2xl font-black font-mono tracking-tight">
+        {sessionDuration}
+      </h3>
     </div>
   </div>
 
-  <button 
-    onClick={() => {
-  if (clockInTime) {
-    localStorage.removeItem("clockInTime")
-    setClockInTime(null)
-    setSessionDuration("00:00:00")
-  } else {
-    const now = Date.now()
-    localStorage.setItem("clockInTime", now)
-    setClockInTime(now)
-  }
-}}
-    className={`px-8 py-3 rounded-xl font-bold transition-all active:scale-95 ${
-      clockInTime 
-        ? "bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500 hover:text-white" 
-        : "bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700"
-    }`}
-  >
-    {clockInTime ? "Clock Out" : "Clock In"}
-  </button>
+  {/* RIGHT SIDE (GROUPED BUTTONS) */}
+  <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+
+    {/* CLOCK BUTTON */}
+    <button 
+      onClick={() => {
+        if (clockInTime) {
+          const shift = {
+            duration: finalDuration,
+            date: Date.now(),
+            checks: getTodayTasks().length
+          }
+
+          const existing = JSON.parse(localStorage.getItem("shifts") || "[]")
+          localStorage.setItem("shifts", JSON.stringify([shift, ...existing]))
+
+          setFinalDuration(sessionDuration)
+
+          const tasks = getTodayTasks()
+          setTodayTasks(tasks)
+
+          localStorage.removeItem("clockInTime")
+          setClockInTime(null)
+          setShowSummary(true)
+
+        } else {
+          const now = Date.now()
+          localStorage.setItem("clockInTime", now)
+          setClockInTime(now)
+          setSessionDuration("00:00:00")
+        }
+      }}
+      className={`flex-1 md:flex-none px-6 py-3 rounded-xl font-bold transition-all active:scale-95 ${
+        clockInTime 
+          ? "bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500 hover:text-white" 
+          : "bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700"
+      }`}
+    >
+      {clockInTime ? "Clock Out" : "Clock In"}
+    </button>
+
+    {/* WEEKLY BUTTON */}
+    <button
+      onClick={() => {
+        calculateWeeklyReport()
+        setShowWeeklyReport(true)
+      }}
+      className="flex-1 md:flex-none px-4 py-3 rounded-xl text-sm font-semibold bg-indigo-500 text-white hover:bg-indigo-600 transition-all"
+    >
+      View Weekly Report
+    </button>
+
+  </div>
+
 </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatItem icon={<ClipboardList size={20}/>} label="Total Shows" value={totalShows} color="blue" theme={theme} />
-          <StatItem icon={<CheckCircle2 size={20}/>} label="My Checked Shows" value={checkedToday} color="emerald" theme={theme} />
-          <StatItem icon={<AlertCircle size={20}/>} label="My Overdue Checks" value={overdueCount} color="rose" theme={theme} />
+          <StatItem icon={<CheckCircle2 size={20}/>} label="My Checked Shows" value={liveStats.checkedToday} color="emerald" theme={theme} />
+          <StatItem icon={<AlertCircle size={20}/>} label="My Overdue Checks" value={liveStats.overdue} color="rose" theme={theme} />
           <div onClick={() => setShowOnlineModal(true)} className="cursor-pointer group">
             <StatItem icon={<Users size={20}/>} label="Teammates Online" value={onlineCount} color="indigo" theme={theme} />
           </div>
@@ -357,6 +561,120 @@ useEffect(() => {
           </div>
         </div>
       )}
+
+      {/* ✅ LOGGING OFF SUMMARY MODAL */}
+{showSummary && (
+  <div className="fixed inset-0 z-[999] flex items-center justify-center">
+
+    {/* Background */}
+    <div 
+      className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+      onClick={() => setShowSummary(false)}
+    />
+
+    {/* Modal */}
+    <div className="relative w-[90%] max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl space-y-5">
+
+      <h2 className="text-lg font-bold text-center">
+        Logging Off Summary
+      </h2>
+
+      <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl text-sm whitespace-pre-line">
+        {generateSummaryText()}
+      </div>
+
+      <div className="flex gap-3">
+        <button
+  onClick={copySummary}
+  className={`flex-1 py-2 rounded-xl font-semibold transition-all ${
+    copied 
+      ? "bg-emerald-500 text-white" 
+      : "bg-blue-600 text-white hover:bg-blue-700"
+  }`}
+>
+  {copied ? "Copied!" : "Copy"}
+</button>
+
+        <button
+  onClick={() => {
+    setShowSummary(false)
+    setSessionDuration("00:00:00")
+  }}
+  className="flex-1 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 font-semibold"
+>
+  Close
+</button>
+      </div>
+
+    </div>
+
+  </div>
+)}
+
+{showWeeklyReport && (
+  <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+    
+    <div className="w-full max-w-xl bg-[#0f172a] border border-white/10 rounded-[2rem] overflow-hidden shadow-2xl">
+      
+      {/* HEADER SECTION */}
+      <div className="p-8 pb-4">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500 mb-1 text-left">This Week</p>
+            <h2 className="text-2xl font-black text-white tracking-tight">Weekly Report</h2>
+          </div>
+          
+          <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-xs font-bold hover:bg-slate-700 transition-all text-white">
+            <Plus size={14} className="rotate-45" /> Download
+          </button>
+        </div>
+
+        {/* DATA GRID (Arranged like the image) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          
+          <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
+            <p className="text-2xl font-black text-blue-500 mb-1">{weeklyData.hours}h</p>
+            <p className="text-[9px] font-bold uppercase tracking-widest opacity-40">Hours Worked</p>
+          </div>
+
+          <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
+            <p className="text-2xl font-black text-indigo-500 mb-1">{weeklyData.days}d</p>
+            <p className="text-[9px] font-bold uppercase tracking-widest opacity-40">Days Active</p>
+          </div>
+
+          <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
+            <p className="text-2xl font-black text-emerald-500 mb-1">{weeklyData.shifts}</p>
+            <p className="text-[9px] font-bold uppercase tracking-widest opacity-40">Shifts Done</p>
+          </div>
+
+          <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
+            <p className="text-2xl font-black text-amber-500 mb-1">{weeklyData.checks}</p>
+            <p className="text-[9px] font-bold uppercase tracking-widest opacity-40">Checks Done</p>
+          </div>
+
+        </div>
+
+        {/* STATUS MESSAGE */}
+        <div className="mt-8 text-center py-4">
+          <p className="text-xs font-medium opacity-40 italic">
+            {weeklyData.shifts === 0 ? "No completed shifts this week." : "Weekly data is synced and up to date."}
+          </p>
+        </div>
+      </div>
+
+      {/* FOOTER ACTION */}
+      <div className="p-6 pt-0 flex justify-center">
+        <button
+          onClick={() => setShowWeeklyReport(false)}
+          className="w-full sm:w-auto px-12 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-sm transition-all active:scale-95 shadow-lg shadow-blue-600/20"
+        >
+          Close Report
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
     </div>
   )
 }
