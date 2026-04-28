@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { updateProfile } from "firebase/auth"
 import { storage, auth } from "../firebase"
+import { addDoc, getDocs } from "firebase/firestore"
 import { 
   MessageCircle, 
   BookOpen, 
@@ -162,7 +163,7 @@ const [weeklyData, setWeeklyData] = useState({
 })
 
 const getTodayTasks = () => {
-  if (!shows || !user) return []
+  if (!liveShows || !user) return []
 
   const today = new Date().toDateString()
 
@@ -236,14 +237,14 @@ const copySummary = async () => {
   }
 }
 useEffect(() => {
-  if (!shows || !user) return
+  if (!liveShows || !user) return
 
   const today = new Date().toDateString()
 
   let checked = 0
   let overdue = 0
 
-  shows.forEach(show => {
+  liveShows.forEach(show => {
     const userChecks = (show.checks || []).filter(
       c => c.userId === user.uid
     )
@@ -254,7 +255,8 @@ useEffect(() => {
 
     if (didCheckToday) checked++
 
-    const latest = userChecks.sort((a, b) => b.checkedAt - a.checkedAt)[0]
+    // ✅ FIX: don't mutate array
+    const latest = [...userChecks].sort((a, b) => b.checkedAt - a.checkedAt)[0]
 
     if (!latest) {
       overdue++
@@ -271,36 +273,40 @@ useEffect(() => {
 
 }, [liveShows, user])
 
-const calculateWeeklyReport = () => {
-  const shifts = JSON.parse(localStorage.getItem("shifts") || "[]")
+const calculateWeeklyReport = async () => {
+  const snap = await getDocs(collection(db, "shifts"))
 
   const now = new Date()
   const startOfWeek = new Date()
   startOfWeek.setDate(now.getDate() - now.getDay())
 
-  let totalSeconds = 0
+  let totalMs = 0
   let daysSet = new Set()
-  let totalChecks = 0
+  let shiftsCount = 0
+  let checksCount = 0
 
-  shifts.forEach(shift => {
+  snap.forEach(doc => {
+    const shift = doc.data()
+
+    if (shift.userId !== user.uid) return
+
     const shiftDate = new Date(shift.date)
 
     if (shiftDate >= startOfWeek) {
-      const [h, m, s] = shift.duration.split(":").map(Number)
-
-      totalSeconds += h * 3600 + m * 60 + s
-
+      totalMs += shift.durationMs
+      shiftsCount++
       daysSet.add(shiftDate.toDateString())
-
-      totalChecks += shift.checks
+      checksCount += shift.checks || 0
     }
   })
 
+  const hours = (totalMs / 3600000).toFixed(1)
+
   setWeeklyData({
-    hours: (totalSeconds / 3600).toFixed(1),
+    hours,
     days: daysSet.size,
-    shifts: shifts.length,
-    checks: totalChecks
+    shifts: shiftsCount,
+    checks: checksCount
   })
 }
 
@@ -410,33 +416,36 @@ const calculateWeeklyReport = () => {
 
     {/* CLOCK BUTTON */}
     <button 
-      onClick={() => {
-        if (clockInTime) {
-          const shift = {
-            duration: finalDuration,
-            date: Date.now(),
-            checks: getTodayTasks().length
-          }
+     onClick={async () => {
+  if (clockInTime) {
 
-          const existing = JSON.parse(localStorage.getItem("shifts") || "[]")
-          localStorage.setItem("shifts", JSON.stringify([shift, ...existing]))
+    const shift = {
+      start: clockInTime,
+      end: Date.now(),
+      durationMs: Date.now() - clockInTime,
+      date: new Date().toISOString(),
+      checks: getTodayTasks().length,
+      userId: user.uid
+    }
 
-          setFinalDuration(sessionDuration)
+    await addDoc(collection(db, "shifts"), shift)
 
-          const tasks = getTodayTasks()
-          setTodayTasks(tasks)
+    setFinalDuration(sessionDuration)
 
-          localStorage.removeItem("clockInTime")
-          setClockInTime(null)
-          setShowSummary(true)
+    const tasks = getTodayTasks()
+    setTodayTasks(tasks)
 
-        } else {
-          const now = Date.now()
-          localStorage.setItem("clockInTime", now)
-          setClockInTime(now)
-          setSessionDuration("00:00:00")
-        }
-      }}
+    localStorage.removeItem("clockInTime")
+    setClockInTime(null)
+    setShowSummary(true)
+
+  } else {
+    const now = Date.now()
+    localStorage.setItem("clockInTime", now)
+    setClockInTime(now)
+    setSessionDuration("00:00:00")
+  }
+}}
       className={`flex-1 md:flex-none px-6 py-3 rounded-xl font-bold transition-all active:scale-95 ${
         clockInTime 
           ? "bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500 hover:text-white" 
@@ -637,9 +646,29 @@ const calculateWeeklyReport = () => {
             <h2 className="text-2xl font-black text-white tracking-tight">Weekly Report</h2>
           </div>
           
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-xs font-bold hover:bg-slate-700 transition-all text-white">
-            <Plus size={14} className="rotate-45" /> Download
-          </button>
+          <button
+  onClick={() => {
+    const text = `
+WEEKLY REPORT
+
+Hours Worked: ${weeklyData.hours}h
+Days Active: ${weeklyData.days}
+Shifts Done: ${weeklyData.shifts}
+Checks Done: ${weeklyData.checks}
+    `
+
+    const blob = new Blob([text], { type: "text/plain" })
+    const url = URL.createObjectURL(blob)
+
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "weekly-report.txt"
+    a.click()
+  }}
+  className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-white/10 rounded-xl text-xs font-bold hover:bg-slate-700 transition-all text-white"
+>
+  Download
+</button>
         </div>
 
         {/* DATA GRID (Arranged like the image) */}
