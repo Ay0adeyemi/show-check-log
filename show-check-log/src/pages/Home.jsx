@@ -29,7 +29,7 @@ export default function Home({ user, theme, toggleTheme, onLogout, onOpenNotes, 
   const navigate = useNavigate()
   const [usersList, setUsersList] = useState([])
   const [showOnlineModal, setShowOnlineModal] = useState(false)
-
+  const [liveShows, setLiveShows] = useState([])
   // 🔥 1. LIVE USERS LISTENER
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "onlineUsers"), (snap) => {
@@ -41,6 +41,18 @@ export default function Home({ user, theme, toggleTheme, onLogout, onOpenNotes, 
     })
     return () => unsub()
   }, [])
+
+  useEffect(() => {
+  const unsub = onSnapshot(collection(db, "shows"), (snap) => {
+    const data = snap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }))
+    setLiveShows(data)
+  })
+
+  return () => unsub()
+}, [])
 
   function getTimeAgo(timestamp) {
     if (!timestamp) return "Never"
@@ -58,7 +70,7 @@ export default function Home({ user, theme, toggleTheme, onLogout, onOpenNotes, 
   const ONLINE_THRESHOLD = 2 * 60 * 1000
   const onlineCount = usersList.filter(u => u.lastActive && (now - u.lastActive < ONLINE_THRESHOLD)).length
   
-  const userShows = shows
+  const userShows = liveShows
   const totalShows = userShows.length
   
   const checkedToday = userShows.reduce((count, show) => {
@@ -148,6 +160,7 @@ const [weeklyData, setWeeklyData] = useState({
   shifts: 0,
   checks: 0
 })
+
 const getTodayTasks = () => {
   if (!shows || !user) return []
 
@@ -256,7 +269,7 @@ useEffect(() => {
     overdue: overdue
   })
 
-}, [shows, user])
+}, [liveShows, user])
 
 const calculateWeeklyReport = () => {
   const shifts = JSON.parse(localStorage.getItem("shifts") || "[]")
